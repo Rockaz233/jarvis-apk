@@ -25,6 +25,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const saveSettingsBtn = document.getElementById('save-settings-btn');
     const apiKeyInput = document.getElementById('gemini-api-key');
     const modelSelect = document.getElementById('gemini-model-select');
+    const voiceEngineSelect = document.getElementById('voice-engine-select');
+    const elevenVoiceInput = document.getElementById('eleven-voice-id');
+    const elevenKeyInput = document.getElementById('eleven-api-key');
     const voicePitchInput = document.getElementById('voice-pitch');
     const voiceRateInput = document.getElementById('voice-rate');
     const autoSpeakToggle = document.getElementById('auto-speak-toggle');
@@ -35,6 +38,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Load initial settings into inputs
     apiKeyInput.value = jarvis.apiKey;
     modelSelect.value = jarvis.model;
+    if (voiceEngineSelect) voiceEngineSelect.value = jarvis.voiceEngine;
+    if (elevenVoiceInput) elevenVoiceInput.value = jarvis.elevenLabsVoiceId || 'r1KmysJdVYZjJCm4mL3b';
+    if (elevenKeyInput) elevenKeyInput.value = jarvis.elevenLabsApiKey;
     voicePitchInput.value = jarvis.voicePitch;
     voiceRateInput.value = jarvis.voiceRate;
     autoSpeakToggle.checked = jarvis.autoSpeak;
@@ -279,10 +285,13 @@ document.addEventListener('DOMContentLoaded', () => {
             modelSelect.value,
             voicePitchInput.value,
             voiceRateInput.value,
-            autoSpeakToggle.checked
+            autoSpeakToggle.checked,
+            elevenKeyInput ? elevenKeyInput.value : '',
+            elevenVoiceInput ? elevenVoiceInput.value : 'r1KmysJdVYZjJCm4mL3b',
+            voiceEngineSelect ? voiceEngineSelect.value : 'elevenlabs'
         );
         settingsModal.classList.remove('active');
-        appendMessage('J.A.R.V.I.S.', 'Configuration updated and verified, Sir.', false);
+        appendMessage('J.A.R.V.I.S.', 'Configuration updated and verified, Sir. Voice engine set to: ' + (voiceEngineSelect ? voiceEngineSelect.value : 'elevenlabs'), false);
         jarvis.speak('Configuration parameters saved.');
     });
 });

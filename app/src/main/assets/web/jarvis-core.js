@@ -7,12 +7,16 @@ class JarvisCore {
     constructor() {
         this.apiKey = localStorage.getItem('jarvis_gemini_api_key') || '';
         this.model = localStorage.getItem('jarvis_gemini_model') || 'gemini-2.0-flash';
+        this.elevenLabsApiKey = localStorage.getItem('jarvis_eleven_api_key') || '';
+        this.elevenLabsVoiceId = localStorage.getItem('jarvis_eleven_voice_id') || 'r1KmysJdVYZjJCm4mL3b';
+        this.voiceEngine = localStorage.getItem('jarvis_voice_engine') || 'elevenlabs';
         this.voicePitch = parseFloat(localStorage.getItem('jarvis_voice_pitch') || '0.95');
         this.voiceRate = parseFloat(localStorage.getItem('jarvis_voice_rate') || '1.05');
         this.autoSpeak = localStorage.getItem('jarvis_auto_speak') !== 'false';
 
         this.isListening = false;
         this.isSpeaking = false;
+        this.currentAudio = null;
         this.recognition = null;
         this.synth = window.speechSynthesis || null;
 
@@ -28,18 +32,24 @@ Personality traits:
         this.initSpeechRecognition();
     }
 
-    saveConfig(apiKey, model, pitch, rate, autoSpeak) {
+    saveConfig(apiKey, model, pitch, rate, autoSpeak, elevenApiKey = '', elevenVoiceId = 'r1KmysJdVYZjJCm4mL3b', voiceEngine = 'elevenlabs') {
         this.apiKey = apiKey.trim();
         this.model = model;
         this.voicePitch = parseFloat(pitch);
         this.voiceRate = parseFloat(rate);
         this.autoSpeak = autoSpeak;
+        this.elevenLabsApiKey = (elevenApiKey || '').trim();
+        this.elevenLabsVoiceId = (elevenVoiceId || 'r1KmysJdVYZjJCm4mL3b').trim();
+        this.voiceEngine = voiceEngine || 'elevenlabs';
 
         localStorage.setItem('jarvis_gemini_api_key', this.apiKey);
         localStorage.setItem('jarvis_gemini_model', this.model);
         localStorage.setItem('jarvis_voice_pitch', this.voicePitch.toString());
         localStorage.setItem('jarvis_voice_rate', this.voiceRate.toString());
         localStorage.setItem('jarvis_auto_speak', this.autoSpeak.toString());
+        localStorage.setItem('jarvis_eleven_api_key', this.elevenLabsApiKey);
+        localStorage.setItem('jarvis_eleven_voice_id', this.elevenLabsVoiceId);
+        localStorage.setItem('jarvis_voice_engine', this.voiceEngine);
     }
 
     initSpeechRecognition() {
@@ -105,16 +115,84 @@ Personality traits:
         if (this.onListeningChange) this.onListeningChange(false);
     }
 
-    speak(text) {
+    async speak(text) {
         if (!this.autoSpeak || !text) return;
 
-        // Clean text for speech (remove markdown asterisks, urls, etc.)
+        // Clean text for speech (remove html tags, markdown asterisks, urls)
         const cleanText = text
+            .replace(/<[^>]*>/g, '')
             .replace(/[*_#`~\[\]]/g, '')
             .replace(/https?:\/\/\S+/g, 'link')
             .trim();
 
-        // 1. If running in Android native APK
+        if (!cleanText) return;
+
+        // Stop any currently playing audio
+        this.stopSpeaking();
+
+        // 1. Try ElevenLabs AI Voice (Voice ID: r1KmysJdVYZjJCm4mL3b or custom)
+        if (this.voiceEngine === 'elevenlabs' && this.elevenLabsApiKey) {
+            try {
+                this.isSpeaking = true;
+                if (this.onSpeakingChange) this.onSpeakingChange(true);
+
+                const voiceId = this.elevenLabsVoiceId || 'r1KmysJdVYZjJCm4mL3b';
+                const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'xi-api-key': this.elevenLabsApiKey
+                    },
+                    body: JSON.stringify({
+                        text: cleanText,
+                        model_id: 'eleven_multilingual_v2',
+                        voice_settings: {
+                            stability: 0.5,
+                            similarity_boost: 0.8
+                        }
+                    })
+                });
+
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const audioUrl = URL.createObjectURL(blob);
+                    const audio = new Audio(audioUrl);
+                    this.currentAudio = audio;
+
+                    audio.onplay = () => {
+                        this.isSpeaking = true;
+                        if (this.onSpeakingChange) this.onSpeakingChange(true);
+                    };
+
+                    audio.onended = () => {
+                        this.isSpeaking = false;
+                        if (this.onSpeakingChange) this.onSpeakingChange(false);
+                        URL.revokeObjectURL(audioUrl);
+                    };
+
+                    audio.onerror = () => {
+                        this.isSpeaking = false;
+                        if (this.onSpeakingChange) this.onSpeakingChange(false);
+                        URL.revokeObjectURL(audioUrl);
+                        this.speakFallback(cleanText);
+                    };
+
+                    await audio.play();
+                    return;
+                } else {
+                    console.warn('ElevenLabs API request failed, falling back to system voice');
+                }
+            } catch (err) {
+                console.warn('ElevenLabs fetch error:', err);
+            }
+        }
+
+        // 2. Fallback to System / Android Voice
+        this.speakFallback(cleanText);
+    }
+
+    speakFallback(cleanText) {
+        // If running in Android native APK
         if (window.Android && typeof window.Android.speak === 'function') {
             this.isSpeaking = true;
             if (this.onSpeakingChange) this.onSpeakingChange(true);
@@ -122,7 +200,7 @@ Personality traits:
             return;
         }
 
-        // 2. Browser SpeechSynthesis fallback
+        // Browser SpeechSynthesis fallback
         if (!this.synth) return;
         this.synth.cancel();
 
@@ -130,7 +208,6 @@ Personality traits:
         utterance.pitch = this.voicePitch;
         utterance.rate = this.voiceRate;
 
-        // Try selecting a good English voice
         const voices = this.synth.getVoices();
         const preferredVoice = voices.find(v => 
             v.lang.startsWith('en') && (v.name.includes('Natural') || v.name.includes('Google') || v.name.includes('Male'))
@@ -156,6 +233,10 @@ Personality traits:
     }
 
     stopSpeaking() {
+        if (this.currentAudio) {
+            this.currentAudio.pause();
+            this.currentAudio = null;
+        }
         if (window.Android && typeof window.Android.stopSpeaking === 'function') {
             window.Android.stopSpeaking();
         } else if (this.synth) {
