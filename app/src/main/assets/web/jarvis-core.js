@@ -388,38 +388,56 @@ Personality traits:
             }
         }
 
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 14000); // 14s timeout
+        const requestBody = JSON.stringify({
+            model: this.nvidiaModel || 'meta/llama-3.3-70b-instruct',
+            messages: messages,
+            temperature: 0.6,
+            max_tokens: 512,
+            top_p: 0.95
+        });
+
+        const targetUrl = 'https://integrate.api.nvidia.com/v1/chat/completions';
 
         try {
-            const response = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${this.nvidiaApiKey}`
-                },
-                body: JSON.stringify({
-                    model: this.nvidiaModel || 'meta/llama-3.3-70b-instruct',
-                    messages: messages,
-                    temperature: 0.6,
-                    max_tokens: 512,
-                    top_p: 0.95
-                }),
-                signal: controller.signal
-            });
-            clearTimeout(timeoutId);
+            let data = null;
 
-            if (!response.ok) {
-                const errData = await response.json().catch(() => ({}));
-                const errMsg = errData.error?.message || errData.message || `HTTP ${response.status}`;
-                console.error("NVIDIA NIM Error:", errMsg);
-                this.conversationHistory.pop();
-                return `Sir, diagnostic error detected from NVIDIA NIM: ${errMsg}. Please check your NVIDIA API key in Settings.`;
+            // 1. If running inside Android native shell, use native HttpURLConnection to completely bypass browser CORS
+            if (window.Android && typeof window.Android.httpPost === 'function') {
+                const responseStr = window.Android.httpPost(targetUrl, this.nvidiaApiKey, requestBody);
+                data = JSON.parse(responseStr);
+                if (data.error) {
+                    const errMsg = data.error.message || JSON.stringify(data.error);
+                    console.error("NVIDIA NIM Error:", errMsg);
+                    this.conversationHistory.pop();
+                    return `Sir, diagnostic error detected from NVIDIA NIM: ${errMsg}. Please check your NVIDIA API key in Settings.`;
+                }
+            } else {
+                // 2. Browser fallback
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 14000);
+
+                const response = await fetch(targetUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${this.nvidiaApiKey}`
+                    },
+                    body: requestBody,
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+
+                if (!response.ok) {
+                    const errData = await response.json().catch(() => ({}));
+                    const errMsg = errData.error?.message || errData.message || `HTTP ${response.status}`;
+                    console.error("NVIDIA NIM Error:", errMsg);
+                    this.conversationHistory.pop();
+                    return `Sir, diagnostic error detected from NVIDIA NIM: ${errMsg}. Please check your NVIDIA API key in Settings.`;
+                }
+                data = await response.json();
             }
 
-            const data = await response.json();
             const reply = data.choices?.[0]?.message?.content;
-
             if (reply) {
                 this.conversationHistory.push({
                     role: "model",
@@ -431,11 +449,9 @@ Personality traits:
                 return "Sir, received an empty response packet from NVIDIA GPU neural core.";
             }
         } catch (err) {
-            clearTimeout(timeoutId);
             this.conversationHistory.pop();
-            console.error("NVIDIA NIM Fetch failed:", err);
-            const msg = err.name === 'AbortError' ? 'NVIDIA request timed out' : err.message;
-            return `Sir, communications network failure with NVIDIA neural cluster: ${msg}.`;
+            console.error("NVIDIA NIM call failed:", err);
+            return `Sir, communications network failure with NVIDIA neural cluster: ${err.message}.`;
         }
     }
 }
