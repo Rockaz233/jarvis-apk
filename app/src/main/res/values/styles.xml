@@ -1,0 +1,10 @@
+<resources>
+    <style name="Theme.JarvisApp" parent="Theme.AppCompat.NoActionBar">
+        <item name="android:windowBackground">@color/hud_bg</item>
+        <item name="android:statusBarColor">@color/hud_bg</item>
+        <item name="android:navigationBarColor">@color/hud_bg</item>
+        <item name="colorPrimary">@color/hud_cyan</item>
+        <item name="colorPrimaryDark">@color/hud_blue</item>
+        <item name="colorAccent">@color/hud_cyan</item>
+    </style>
+</resources>
