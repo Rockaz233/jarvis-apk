@@ -161,14 +161,23 @@ document.addEventListener('DOMContentLoaded', () => {
         reactorStatus.textContent = 'PROCESSING QUERY...';
         reactorContainer.classList.add('speaking');
 
+        // Watchdog timer to prevent UI sticking on PROCESSING QUERY...
+        const watchdog = setTimeout(() => {
+            if (reactorStatus.textContent === 'PROCESSING QUERY...') {
+                reactorContainer.classList.remove('speaking');
+                reactorStatus.textContent = 'STANDBY // TAP TO SPEAK';
+            }
+        }, 12000);
+
         try {
             const reply = await jarvis.queryGemini(cleanQuery);
             appendMessage('J.A.R.V.I.S.', reply, false);
-            jarvis.speak(reply);
+            await jarvis.speak(reply);
         } catch (e) {
             console.error(e);
             appendMessage('J.A.R.V.I.S.', 'Apologies, Sir. An internal exception occurred.', false);
         } finally {
+            clearTimeout(watchdog);
             if (!jarvis.isSpeaking) {
                 reactorContainer.classList.remove('speaking');
                 reactorStatus.textContent = 'STANDBY // TAP TO SPEAK';

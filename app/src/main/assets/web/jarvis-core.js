@@ -201,6 +201,13 @@ Personality traits:
             this.isSpeaking = true;
             if (this.onSpeakingChange) this.onSpeakingChange(true);
             window.Android.speak(cleanText);
+            // Safety timeout in case TTS engine doesn't fire utterance completion
+            setTimeout(() => {
+                if (this.isSpeaking) {
+                    this.isSpeaking = false;
+                    if (this.onSpeakingChange) this.onSpeakingChange(false);
+                }
+            }, 8000);
             return;
         }
 
@@ -250,7 +257,7 @@ Personality traits:
         if (this.onSpeakingChange) this.onSpeakingChange(false);
     }
 
-    // Call Google Gemini API (100% Free API)
+    // Call Google Gemini API (100% Free API) with multi-model fallback & timeout
     async queryGemini(userPrompt) {
         if (!this.apiKey) {
             return 'Sir, I require an active Google Gemini API key to access full cognitive functions.<br><button onclick="document.getElementById(\'open-settings-btn\').click()" style="margin-top:10px; display:inline-block; background:#00e5ff; color:#030812; font-family:\'Orbitron\',sans-serif; font-weight:bold; font-size:0.75rem; padding:8px 14px; border:none; border-radius:4px; cursor:pointer; box-shadow:0 0 10px rgba(0,229,255,0.6);">⚙️ TAP TO OPEN SETTINGS</button>';
@@ -262,54 +269,80 @@ Personality traits:
             parts: [{ text: userPrompt }]
         });
 
-        // Keep last 10 messages for memory context
-        if (this.conversationHistory.length > 10) {
-            this.conversationHistory = this.conversationHistory.slice(-10);
+        // Ensure proper alternating roles in history
+        const cleanContents = [];
+        for (const item of this.conversationHistory) {
+            if (cleanContents.length === 0 || cleanContents[cleanContents.length - 1].role !== item.role) {
+                cleanContents.push(item);
+            }
         }
+        // Keep last 8 turns
+        const finalContents = cleanContents.slice(-8);
 
-        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent?key=${this.apiKey}`;
+        // Candidate models list in priority order
+        const candidateModels = [
+            this.model || 'gemini-3.8-flash',
+            'gemini-2.5-flash',
+            'gemini-2.0-flash',
+            'gemini-1.5-flash'
+        ];
+        const modelsToTry = [...new Set(candidateModels)];
 
-        const payload = {
-            contents: this.conversationHistory,
-            systemInstruction: {
-                parts: [{ text: this.systemInstruction }]
-            },
-            generationConfig: {
-                temperature: 0.7,
-                maxOutputTokens: 500,
-                topP: 0.95
-            }
-        };
+        let lastErrorMessage = '';
 
-        try {
-            const response = await fetch(endpoint, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
+        for (const modelName of modelsToTry) {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 12000); // 12s timeout
 
-            if (!response.ok) {
-                const errData = await response.json().catch(() => ({}));
-                const errMsg = errData.error?.message || `HTTP ${response.status}`;
-                console.error("Gemini API Error:", errMsg);
-                return `Sir, diagnostic error detected: ${errMsg}. Please verify your API key in Settings.`;
-            }
+            try {
+                const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${this.apiKey}`;
+                const payload = {
+                    contents: finalContents,
+                    systemInstruction: {
+                        parts: [{ text: this.systemInstruction }]
+                    },
+                    generationConfig: {
+                        temperature: 0.7,
+                        maxOutputTokens: 500,
+                        topP: 0.95
+                    }
+                };
 
-            const data = await response.json();
-            const reply = data.candidates?.[0]?.content?.parts?.[0]?.text;
-
-            if (reply) {
-                this.conversationHistory.push({
-                    role: "model",
-                    parts: [{ text: reply }]
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                    signal: controller.signal
                 });
-                return reply.trim();
-            } else {
-                return "I processed your request, Sir, but received an empty transmission from the neural network.";
+                clearTimeout(timeoutId);
+
+                if (response.ok) {
+                    const data = await response.json();
+                    const reply = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+                    if (reply) {
+                        this.conversationHistory.push({
+                            role: "model",
+                            parts: [{ text: reply }]
+                        });
+                        return reply.trim();
+                    }
+                } else {
+                    const errData = await response.json().catch(() => ({}));
+                    lastErrorMessage = errData.error?.message || `HTTP ${response.status}`;
+                    console.warn(`Model ${modelName} returned error: ${lastErrorMessage}, trying fallback...`);
+                    continue;
+                }
+            } catch (err) {
+                clearTimeout(timeoutId);
+                console.warn(`Model ${modelName} fetch failed:`, err);
+                lastErrorMessage = err.name === 'AbortError' ? 'Request timed out' : err.message;
+                continue;
             }
-        } catch (error) {
-            console.error("Network / Fetch Error:", error);
-            return "Sir, communications network failure. Unable to reach satellite relay. Please check your internet connection.";
         }
+
+        // If all models failed, remove the failed user prompt so history is not broken
+        this.conversationHistory.pop();
+        return `Sir, diagnostic error detected: ${lastErrorMessage || 'Service temporarily unavailable'}. Please verify your API key in Settings.`;
     }
 }
