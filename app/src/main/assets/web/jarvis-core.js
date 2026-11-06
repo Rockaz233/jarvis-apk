@@ -168,7 +168,7 @@ Personality traits:
     // Call Google Gemini API (100% Free API)
     async queryGemini(userPrompt) {
         if (!this.apiKey) {
-            return "Sir, I require an active Google Gemini API key to access full cognitive functions. Please open Settings (⚙) and paste your free API key.";
+            return 'Sir, I require an active Google Gemini API key to access full cognitive functions.<br><button onclick="document.getElementById(\'open-settings-btn\').click()" style="margin-top:10px; display:inline-block; background:#00e5ff; color:#030812; font-family:\'Orbitron\',sans-serif; font-weight:bold; font-size:0.75rem; padding:8px 14px; border:none; border-radius:4px; cursor:pointer; box-shadow:0 0 10px rgba(0,229,255,0.6);">⚙️ TAP TO OPEN SETTINGS</button>';
         }
 
         // Add user message to history

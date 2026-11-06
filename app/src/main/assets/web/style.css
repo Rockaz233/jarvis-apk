@@ -67,7 +67,7 @@ body::before {
 .hud-header {
     position: relative;
     z-index: 10;
-    padding: 12px 18px;
+    padding: 10px 14px;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -79,7 +79,9 @@ body::before {
 .hud-brand {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
+    flex-shrink: 1;
+    min-width: 0;
 }
 
 .status-dot {
@@ -89,36 +91,47 @@ body::before {
     background: var(--hud-cyan);
     box-shadow: 0 0 8px var(--hud-cyan);
     animation: pulse 2s infinite ease-in-out;
+    flex-shrink: 0;
 }
 
 .hud-title {
     font-family: var(--font-heading);
     font-weight: 900;
-    font-size: 1.15rem;
-    letter-spacing: 2px;
+    font-size: 1.05rem;
+    letter-spacing: 1.5px;
     color: var(--hud-cyan);
     text-shadow: var(--hud-cyan-glow);
+    white-space: nowrap;
 }
 
 .hud-version {
     font-family: var(--font-heading);
-    font-size: 0.65rem;
+    font-size: 0.6rem;
     color: rgba(0, 229, 255, 0.6);
     letter-spacing: 1px;
+    white-space: nowrap;
+}
+
+@media (max-width: 420px) {
+    .hud-version {
+        display: none;
+    }
 }
 
 .hud-stats {
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: 8px;
+    flex-shrink: 0;
 }
 
 .stat-item {
     font-family: var(--font-heading);
-    font-size: 0.75rem;
+    font-size: 0.72rem;
     display: flex;
-    gap: 5px;
+    gap: 4px;
     color: #80deea;
+    white-space: nowrap;
 }
 
 .stat-label {
@@ -131,23 +144,26 @@ body::before {
 }
 
 .settings-btn {
-    background: transparent;
-    border: 1px solid var(--hud-border);
+    background: rgba(0, 229, 255, 0.18);
+    border: 1.5px solid var(--hud-cyan);
     color: var(--hud-cyan);
-    font-size: 1.1rem;
-    width: 32px;
-    height: 32px;
-    border-radius: 4px;
+    font-size: 1.15rem;
+    width: 36px;
+    height: 36px;
+    border-radius: 6px;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
+    flex-shrink: 0;
+    box-shadow: 0 0 12px rgba(0, 229, 255, 0.4);
     transition: all 0.2s;
 }
 
 .settings-btn:active {
-    background: var(--hud-cyan-dim);
-    box-shadow: var(--hud-cyan-glow);
+    background: var(--hud-cyan);
+    color: #030812;
+    box-shadow: 0 0 20px rgba(0, 229, 255, 0.8);
 }
 
 /* Main Container */

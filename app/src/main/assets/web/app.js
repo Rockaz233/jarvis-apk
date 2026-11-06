@@ -110,7 +110,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const textDiv = document.createElement('div');
         textDiv.className = 'msg-text';
-        textDiv.textContent = text;
+        if (isUser) {
+            textDiv.textContent = text;
+        } else {
+            textDiv.innerHTML = text;
+        }
 
         const timeDiv = document.createElement('div');
         timeDiv.className = 'msg-time';
@@ -138,6 +142,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (lower.includes('clear screen') || lower.includes('clear feed') || lower.includes('clear chat')) {
             feedMessages.innerHTML = '';
             jarvis.speak('Screen cleared, Sir.');
+            return;
+        }
+
+        if (lower.includes('setting') || lower.includes('api key') || lower.includes('config') || lower.includes('key')) {
+            settingsModal.classList.add('active');
+            appendMessage('J.A.R.V.I.S.', 'Opening System Configuration for you, Sir. Paste your Gemini API key and tap SAVE CONFIG.<br><button onclick="document.getElementById(\'open-settings-btn\').click()" style="margin-top:8px; display:inline-block; background:#00e5ff; color:#030812; font-family:\'Orbitron\',sans-serif; font-weight:bold; font-size:0.75rem; padding:6px 12px; border:none; border-radius:4px; cursor:pointer;">⚙️ OPEN SETTINGS</button>', false);
+            jarvis.speak('Opening System Configuration for you, Sir.');
             return;
         }
 
@@ -244,6 +255,13 @@ document.addEventListener('DOMContentLoaded', () => {
     openSettingsBtn.addEventListener('click', () => {
         settingsModal.classList.add('active');
     });
+
+    const quickSettingsBtn = document.getElementById('quick-settings-btn');
+    if (quickSettingsBtn) {
+        quickSettingsBtn.addEventListener('click', () => {
+            settingsModal.classList.add('active');
+        });
+    }
 
     closeSettingsBtn.addEventListener('click', () => {
         settingsModal.classList.remove('active');
