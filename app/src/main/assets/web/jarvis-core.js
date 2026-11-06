@@ -5,8 +5,12 @@
 
 class JarvisCore {
     constructor() {
-        this.apiKey = localStorage.getItem('jarvis_gemini_api_key') || '';
-        this.model = localStorage.getItem('jarvis_gemini_model') || 'gemini-2.0-flash';
+        let savedModel = localStorage.getItem('jarvis_gemini_model');
+        if (!savedModel || savedModel.includes('gemini-2.0') || savedModel.includes('gemini-1.5')) {
+            savedModel = 'gemini-3.8-flash';
+            localStorage.setItem('jarvis_gemini_model', savedModel);
+        }
+        this.model = savedModel;
         this.elevenLabsApiKey = localStorage.getItem('jarvis_eleven_api_key') || '';
         this.elevenLabsVoiceId = localStorage.getItem('jarvis_eleven_voice_id') || 'r1KmysJdVYZjJCm4mL3b';
         this.voiceEngine = localStorage.getItem('jarvis_voice_engine') || 'elevenlabs';
