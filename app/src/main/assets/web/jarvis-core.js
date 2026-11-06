@@ -5,6 +5,9 @@
 
 class JarvisCore {
     constructor() {
+        this.aiProvider = localStorage.getItem('jarvis_ai_provider') || 'nvidia';
+        this.nvidiaApiKey = localStorage.getItem('jarvis_nvidia_api_key') || '';
+        this.nvidiaModel = localStorage.getItem('jarvis_nvidia_model') || 'meta/llama-3.3-70b-instruct';
         let savedModel = localStorage.getItem('jarvis_gemini_model');
         if (!savedModel || savedModel.includes('gemini-2.0') || savedModel.includes('gemini-1.5')) {
             savedModel = 'gemini-3.8-flash';
@@ -36,9 +39,12 @@ Personality traits:
         this.initSpeechRecognition();
     }
 
-    saveConfig(apiKey, model, pitch, rate, autoSpeak, elevenApiKey = '', elevenVoiceId = 'r1KmysJdVYZjJCm4mL3b', voiceEngine = 'elevenlabs') {
-        this.apiKey = apiKey.trim();
-        this.model = model;
+    saveConfig(geminiKey, geminiModel, pitch, rate, autoSpeak, elevenApiKey = '', elevenVoiceId = 'r1KmysJdVYZjJCm4mL3b', voiceEngine = 'elevenlabs', aiProvider = 'nvidia', nvidiaApiKey = '', nvidiaModel = 'meta/llama-3.3-70b-instruct') {
+        this.aiProvider = aiProvider || 'nvidia';
+        this.nvidiaApiKey = (nvidiaApiKey || '').trim();
+        this.nvidiaModel = nvidiaModel || 'meta/llama-3.3-70b-instruct';
+        this.apiKey = geminiKey.trim();
+        this.model = geminiModel;
         this.voicePitch = parseFloat(pitch);
         this.voiceRate = parseFloat(rate);
         this.autoSpeak = autoSpeak;
@@ -46,6 +52,9 @@ Personality traits:
         this.elevenLabsVoiceId = (elevenVoiceId || 'r1KmysJdVYZjJCm4mL3b').trim();
         this.voiceEngine = voiceEngine || 'elevenlabs';
 
+        localStorage.setItem('jarvis_ai_provider', this.aiProvider);
+        localStorage.setItem('jarvis_nvidia_api_key', this.nvidiaApiKey);
+        localStorage.setItem('jarvis_nvidia_model', this.nvidiaModel);
         localStorage.setItem('jarvis_gemini_api_key', this.apiKey);
         localStorage.setItem('jarvis_gemini_model', this.model);
         localStorage.setItem('jarvis_voice_pitch', this.voicePitch.toString());
@@ -344,5 +353,89 @@ Personality traits:
         // If all models failed, remove the failed user prompt so history is not broken
         this.conversationHistory.pop();
         return `Sir, diagnostic error detected: ${lastErrorMessage || 'Service temporarily unavailable'}. Please verify your API key in Settings.`;
+    }
+
+    async queryAI(userPrompt) {
+        if (this.aiProvider === 'nvidia') {
+            return await this.queryNvidia(userPrompt);
+        } else {
+            return await this.queryGemini(userPrompt);
+        }
+    }
+
+    // Call NVIDIA NIM API (Ultra-fast GPU clusters with Llama 3.3 70B, etc.)
+    async queryNvidia(userPrompt) {
+        if (!this.nvidiaApiKey) {
+            return 'Sir, I require an active NVIDIA NIM API key (nvapi-...).<br><button onclick="document.getElementById(\'open-settings-btn\').click()" style="margin-top:10px; display:inline-block; background:#00e5ff; color:#030812; font-family:\'Orbitron\',sans-serif; font-weight:bold; font-size:0.75rem; padding:8px 14px; border:none; border-radius:4px; cursor:pointer; box-shadow:0 0 10px rgba(0,229,255,0.6);">⚙️ TAP TO ENTER NVIDIA KEY</button>';
+        }
+
+        // Add user message to history
+        this.conversationHistory.push({
+            role: "user",
+            parts: [{ text: userPrompt }]
+        });
+
+        // Convert conversationHistory to OpenAI format for NVIDIA
+        const messages = [
+            { role: "system", content: this.systemInstruction }
+        ];
+
+        for (const item of this.conversationHistory.slice(-8)) {
+            const role = item.role === 'model' ? 'assistant' : 'user';
+            const text = item.parts?.[0]?.text || '';
+            if (text) {
+                messages.push({ role, content: text });
+            }
+        }
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 14000); // 14s timeout
+
+        try {
+            const response = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${this.nvidiaApiKey}`
+                },
+                body: JSON.stringify({
+                    model: this.nvidiaModel || 'meta/llama-3.3-70b-instruct',
+                    messages: messages,
+                    temperature: 0.6,
+                    max_tokens: 512,
+                    top_p: 0.95
+                }),
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+
+            if (!response.ok) {
+                const errData = await response.json().catch(() => ({}));
+                const errMsg = errData.error?.message || errData.message || `HTTP ${response.status}`;
+                console.error("NVIDIA NIM Error:", errMsg);
+                this.conversationHistory.pop();
+                return `Sir, diagnostic error detected from NVIDIA NIM: ${errMsg}. Please check your NVIDIA API key in Settings.`;
+            }
+
+            const data = await response.json();
+            const reply = data.choices?.[0]?.message?.content;
+
+            if (reply) {
+                this.conversationHistory.push({
+                    role: "model",
+                    parts: [{ text: reply }]
+                });
+                return reply.trim();
+            } else {
+                this.conversationHistory.pop();
+                return "Sir, received an empty response packet from NVIDIA GPU neural core.";
+            }
+        } catch (err) {
+            clearTimeout(timeoutId);
+            this.conversationHistory.pop();
+            console.error("NVIDIA NIM Fetch failed:", err);
+            const msg = err.name === 'AbortError' ? 'NVIDIA request timed out' : err.message;
+            return `Sir, communications network failure with NVIDIA neural cluster: ${msg}.`;
+        }
     }
 }

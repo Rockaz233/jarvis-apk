@@ -25,6 +25,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const saveSettingsBtn = document.getElementById('save-settings-btn');
     const apiKeyInput = document.getElementById('gemini-api-key');
     const modelSelect = document.getElementById('gemini-model-select');
+    const aiProviderSelect = document.getElementById('ai-provider-select');
+    const nvidiaApiKeyInput = document.getElementById('nvidia-api-key');
+    const nvidiaModelSelect = document.getElementById('nvidia-model-select');
+    const nvidiaGroup = document.getElementById('nvidia-settings-group');
+    const geminiGroup = document.getElementById('gemini-settings-group');
     const voiceEngineSelect = document.getElementById('voice-engine-select');
     const elevenVoiceInput = document.getElementById('eleven-voice-id');
     const elevenKeyInput = document.getElementById('eleven-api-key');
@@ -35,7 +40,30 @@ document.addEventListener('DOMContentLoaded', () => {
     const canvas = document.getElementById('sound-waves');
     const ctx = canvas.getContext('2d');
 
+    // Toggle provider UI
+    function updateProviderUI() {
+        const prov = aiProviderSelect ? aiProviderSelect.value : 'nvidia';
+        if (nvidiaGroup && geminiGroup) {
+            if (prov === 'nvidia') {
+                nvidiaGroup.style.display = 'block';
+                geminiGroup.style.display = 'none';
+            } else {
+                nvidiaGroup.style.display = 'none';
+                geminiGroup.style.display = 'block';
+            }
+        }
+    }
+
+    if (aiProviderSelect) {
+        aiProviderSelect.addEventListener('change', updateProviderUI);
+    }
+
     // Load initial settings into inputs
+    if (aiProviderSelect) aiProviderSelect.value = jarvis.aiProvider || 'nvidia';
+    if (nvidiaApiKeyInput) nvidiaApiKeyInput.value = jarvis.nvidiaApiKey || '';
+    if (nvidiaModelSelect) nvidiaModelSelect.value = jarvis.nvidiaModel || 'meta/llama-3.3-70b-instruct';
+    updateProviderUI();
+
     apiKeyInput.value = jarvis.apiKey;
     modelSelect.value = jarvis.model;
     if (voiceEngineSelect) voiceEngineSelect.value = jarvis.voiceEngine;
@@ -170,7 +198,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 12000);
 
         try {
-            const reply = await jarvis.queryGemini(cleanQuery);
+            const reply = await jarvis.queryAI(cleanQuery);
             appendMessage('J.A.R.V.I.S.', reply, false);
             await jarvis.speak(reply);
         } catch (e) {
@@ -289,6 +317,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     saveSettingsBtn.addEventListener('click', () => {
+        const prov = aiProviderSelect ? aiProviderSelect.value : 'nvidia';
         jarvis.saveConfig(
             apiKeyInput.value,
             modelSelect.value,
@@ -297,10 +326,13 @@ document.addEventListener('DOMContentLoaded', () => {
             autoSpeakToggle.checked,
             elevenKeyInput ? elevenKeyInput.value : '',
             elevenVoiceInput ? elevenVoiceInput.value : 'r1KmysJdVYZjJCm4mL3b',
-            voiceEngineSelect ? voiceEngineSelect.value : 'elevenlabs'
+            voiceEngineSelect ? voiceEngineSelect.value : 'elevenlabs',
+            prov,
+            nvidiaApiKeyInput ? nvidiaApiKeyInput.value : '',
+            nvidiaModelSelect ? nvidiaModelSelect.value : 'meta/llama-3.3-70b-instruct'
         );
         settingsModal.classList.remove('active');
-        appendMessage('J.A.R.V.I.S.', 'Configuration updated and verified, Sir. Voice engine set to: ' + (voiceEngineSelect ? voiceEngineSelect.value : 'elevenlabs'), false);
+        appendMessage('J.A.R.V.I.S.', `Configuration updated, Sir. AI Provider: ${prov.toUpperCase()} // Voice: ${voiceEngineSelect ? voiceEngineSelect.value : 'elevenlabs'}`, false);
         jarvis.speak('Configuration parameters saved.');
     });
 });
